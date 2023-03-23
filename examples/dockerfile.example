@@ -1,0 +1,8 @@
+FROM servabofidem/fastapi-ubuntu:latest
+
+COPY ./app /app
+WORKDIR /app
+
+# 
+RUN pip install --no-cache-dir --upgrade -r requirements.txt
+#

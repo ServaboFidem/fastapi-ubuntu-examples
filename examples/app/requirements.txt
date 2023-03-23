@@ -1,0 +1,5 @@
+# no need to specify fastapi here, because it's already baked into the base image.
+
+# specify all of your app's requirements here.
+pillow-simd
+puppeteer

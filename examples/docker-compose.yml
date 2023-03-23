@@ -1,0 +1,72 @@
+version: '3.8'
+
+# Setup the network for the reverse proxy. 
+# All containers will be connected to this network.
+networks:
+  default:
+    internal: false
+    name: reverse-proxy
+
+services:
+  traefik:
+    image: traefik:2.6
+    restart: always
+    command:
+      # We are going to use the docker provider
+      - "--providers.docker"
+      # Only enabled containers should be exposed
+      - "--providers.docker.exposedByDefault=false"
+      # We want to use the dashbaord
+      - "--api.dashboard=true"
+      # The entrypoints we ant to expose
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      # Enable ACME (Let's Encrypt): automatic SSL.
+      - "--certificatesresolvers.letsencrypt.acme.email=youremail@company.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/etc/traefik/acme/acme.json"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      # Global redirect to https
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./letsencrypt/acme.json:/etc/traefik/acme/acme.json
+    labels:
+      - "traefik.enable=true"
+      # generate your hashed password using either htpasswd, or an online generator like https://www.web2generators.com/apache-tools/htpasswd-generator
+      # JUST REMEMBER:  anywhere you see a $, make sure you duplicate it.  $1234$5678 should become $$1234$$5678, or else
+      # your config will break.
+      #
+      # default here is yourname:yourpassword
+      - "traefik.http.middlewares.auth-example.basicauth.users=yourname:$$apr1$$8uh2fmrl$$DLxsV7OEWTnXgpyQw1OrX1"
+      - "traefik.http.routers.dashboard.middlewares=auth-example"
+      - "traefik.http.routers.dashboard-http.entrypoints=web"
+      - "traefik.http.routers.dashboard-http.rule=Host(`traefik-frontend.yourdomain.com`)"
+      - "traefik.http.routers.dashboard-http.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik-frontend.yourdomain.com`)"
+      - "traefik.http.routers.dashboard.tls=true"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+
+  microservice:
+  # build your docker image first, based on the dockerfile.example in this directory.
+  # mount your docker image here, and specify whatever tag you built it with
+    image: my/microservice
+    ports:
+      - 5001
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.microservice-http.entrypoints=web"
+      - "traefik.http.routers.microservice-http.rule=Host(`microservice.yourdomain.com`)"
+      - "traefik.http.routers.microservice.entrypoints=websecure"
+      - "traefik.http.routers.microservice.rule=Host(`microservice.yourdomain.com`)"
+      - "traefik.http.routers.microservice.tls=true"
+      - "traefik.http.routers.microservice.tls.certresolver=letsencrypt"
+      - "traefik.http.services.microservice.loadbalancer.server.port=5001"
+    restart: always
+
